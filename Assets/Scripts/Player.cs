@@ -10,27 +10,29 @@ public class Player : MonoBehaviour
 
     [SerializeField] private LayerMask layerMask;
 
-    //[SerializeField] private GameObject hitSoundGameObject;
+    [SerializeField] private GameObject hitSoundGameObject;
     
     [SerializeField] private GameObject shootSoundGameObject;
-    
+
+    private Animator _anim;
+    private static readonly int Scoped = Animator.StringToHash("Scoped");
+
     // Start is called before the first frame update
     void Start()
     {
         _cameraTransform = Camera.main.transform;
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
+        _anim = GetComponent<Animator>();
     }
 
-    // Update is called once per frame
-    void Update()
+    public void OnZoom()
     {
-        
+        _anim.SetBool(Scoped, !_anim.GetBool(Scoped));
     }
 
     public void OnFire()
     {
-        
         Shoot();
     }
 
@@ -48,19 +50,22 @@ public class Player : MonoBehaviour
     {
         if (Physics.Raycast(_cameraTransform.position, _cameraTransform.forward, out RaycastHit hit, 256, layerMask))
         {
-            Debug.Log(hit.transform.name);
-            
+           
             // Create shot noise from gun
             Instantiate(shootSoundGameObject, transform.position, Quaternion.identity);
             
             // Check if person hit, kill if so
             if (hit.transform.gameObject.layer == LayerMask.NameToLayer("People"))
             {
-                hit.transform.GetComponent<Person>().GetShot();
+                if (hit.transform.TryGetComponent<BulletHitCallback>(out var callback))
+                {
+                    // Create hit noise from hit
+                    Instantiate(hitSoundGameObject, hit.point, Quaternion.LookRotation(hit.normal, Vector3.up));
+                    callback.GetShot(hit.point);
+                }
             }
             
-            // Create hit noise from hit
-            //Instantiate(hitSoundGameObject, hit.point, Quaternion.LookRotation(hit.normal, Vector3.up));
+            
         }
     }
 }

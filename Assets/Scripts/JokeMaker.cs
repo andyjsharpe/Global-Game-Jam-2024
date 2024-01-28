@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using Unity.Mathematics;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 using Random = UnityEngine.Random;
 
@@ -31,8 +32,11 @@ public class JokeMaker : MonoBehaviour
     [SerializeField] private AudioClip[] claps;
 
     public int enemyStack;
+    public int angryStack;
     [SerializeField] private Transform spawnTransform;
     [SerializeField] private GameObject[] peopleToSpawn;
+    
+    [SerializeField] private GameObject endVoice;
     
     // Start is called before the first frame update
     void Start()
@@ -56,6 +60,15 @@ public class JokeMaker : MonoBehaviour
         
         while (true)
         {
+            foreach (var person in FindObjectsOfType<Person>())
+            {
+                if (Vector3.Distance(transform.position, person.transform.position) >= 32)
+                {
+                    continue;
+                }
+                person.ResetAnim();
+            }
+            
             var jokeParts = jokeList[Random.Range(0, jokeList.Length)].jokeComponents;
             foreach (var jokeStuff in jokeParts)
             {
@@ -75,10 +88,14 @@ public class JokeMaker : MonoBehaviour
             
             // Update opinions based on joke
             var jokeScore = NormalDistribution.NormalizedRandom(-1, 1, 3) * 0.25f;
-            jokeScore -= 0.2f;
+            jokeScore -= 0.1f;
             var people = FindObjectsOfType<Person>();
             foreach (var person in people)
             {
+                if (Vector3.Distance(transform.position, person.transform.position) >= 32)
+                {
+                    continue;
+                }
                 person.HearJoke(jokeScore);
             }
 
@@ -87,6 +104,10 @@ public class JokeMaker : MonoBehaviour
             // Find the person with the lowest opinion
             foreach (var person in people)
             {
+                if (Vector3.Distance(transform.position, person.transform.position) >= 32)
+                {
+                    continue;
+                }
                 if (person.opinion < lowestOpinion)
                 {
                     lowestPerson = person;
@@ -98,13 +119,17 @@ public class JokeMaker : MonoBehaviour
             float lineLength = 0;
             foreach (var person in people)
             {
+                if (Vector3.Distance(transform.position, person.transform.position) >= 32)
+                {
+                    continue;
+                }
                 if (person != lowestPerson)
                 {
                     if (person.opinion >= 0)
                     {
                         person.audioSource.volume = 0.5f;
                         person.audioSource.priority = 128;
-                        person.Clap(claps[Random.Range(0, claps.Length)]);
+                        person.Clap(claps[Random.Range(0, claps.Length)], SoundTypes.Clap);
                     }
                 }
                 else
@@ -115,7 +140,7 @@ public class JokeMaker : MonoBehaviour
                     lineLength = voiceLine.length / person.audioSource.pitch;
                     person.audioSource.volume = 1f;
                     person.audioSource.priority = 64;
-                    person.Clap(voiceLine);
+                    person.Clap(voiceLine, lowestOpinion < 0 ? SoundTypes.Boo : SoundTypes.Cheer);
                 }
             }
             
@@ -133,6 +158,13 @@ public class JokeMaker : MonoBehaviour
             }
 
             UpdateSlider(people);
+
+            float completion = slider.value;
+            if (completion <= 0)
+            {
+                StartCoroutine(End());
+                break;
+            }
             
             yield return new WaitForSeconds(lineLength);
             
@@ -146,8 +178,13 @@ public class JokeMaker : MonoBehaviour
         {
             if (enemyStack > 0)
             {
-                Instantiate(peopleToSpawn[Random.Range(0, peopleToSpawn.Length)], spawnTransform.position,
+                var g = Instantiate(peopleToSpawn[Random.Range(0, peopleToSpawn.Length)], spawnTransform.position,
                     quaternion.identity);
+                if (angryStack > 0)
+                {
+                    g.GetComponent<Person>().opinion = -0.5f;
+                    angryStack--;
+                }
                 enemyStack--;
             }
             yield return new WaitForSeconds(NormalDistribution.NormalizedRandom(0.5f, 1f, 1));
@@ -161,14 +198,28 @@ public class JokeMaker : MonoBehaviour
         float sum = 0;
         foreach (var person in people)
         {
-            if (Vector3.Distance(transform.position, person.transform.position) < 24 && person.opinion >= 0)
+            if (Vector3.Distance(transform.position, person.transform.position) < 32 && person.opinion >= 0)
             {
                 sum++;
             }
         }
 
-        var completion = sum / people.Length;
+        float completion = 0;
+        if (people.Length > 0)
+        {
+            completion = sum / people.Length;
+        }
         slider.value = completion;
         sliderBackground.color = Color.Lerp(Color.magenta, Color.cyan, completion);
+    }
+
+    private IEnumerator End()
+    {
+        //play voice
+        Instantiate(endVoice, transform.position + Vector3.right * 30 + Vector3.up * 10, Quaternion.identity);
+
+        yield return new WaitForSeconds(6);
+        
+        SceneManager.LoadScene(2);
     }
 }
